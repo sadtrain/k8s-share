@@ -1,0 +1,16 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ztest-deploy-nginx
+spec:
+  selector:
+    matchLabels:
+      app: ztest-deploy
+  template:
+    metadata:
+      labels:
+        app: ztest-deploy
+    spec:
+      containers:
+        - image: nginx:1.22.0
+          name: ztest-nginx

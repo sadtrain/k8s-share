@@ -287,7 +287,7 @@ spec:
 • Notln : Label的值与任何指定的values 不匹配。
 • Exists : pod 必须包含一个指定名称的标签（值不重要）。使用此运算符时，
 不应指定 values字段。
-• DoesNotExist : pod不得包含有指定名称的标签。values属性不得指定 
+• DoesNotExist : pod不得包含有指定名称的标签。values属性不得指定
 
 还有一个注意的点是apps/v1
 
@@ -627,7 +627,7 @@ spec:
 
 上面提到的NFS对开发人员来说是比较复杂的，诸如此类的持久卷类型，繁琐程度都差不多。
 
- 要创建支持 NFS 协议的卷， 开发人员必须知道 NFS 节点所在的实际服务器。 这违背了 Kubernetes 的基本理念。
+要创建支持 NFS 协议的卷， 开发人员必须知道 NFS 节点所在的实际服务器。 这违背了 Kubernetes 的基本理念。
 
 所以就有了以下结构，PersistenceVolume和PersistenceVolumeClaim分开。开发人员只需要配置PVC，而PV由运维人员来准备。
 
@@ -722,9 +722,9 @@ spec:
 
   用于描述用户应用对存储资源的访问权限，访问权限包括下面几种方式：
 
-  - ReadWriteOnce（RWO）：读写权限，但是只能被单个节点挂载
-  - ReadOnlyMany（ROX）： 只读权限，可以被多个节点挂载
-  - ReadWriteMany（RWX）：读写权限，可以被多个节点挂载
+    - ReadWriteOnce（RWO）：读写权限，但是只能被单个节点挂载
+    - ReadOnlyMany（ROX）： 只读权限，可以被多个节点挂载
+    - ReadWriteMany（RWX）：读写权限，可以被多个节点挂载
 
   `需要注意的是，底层不同的存储类型可能支持的访问模式不同`
 
@@ -732,8 +732,8 @@ spec:
 
   PV可以通过storageClassName参数指定一个存储类别
 
-  - 具有特定类别的PV只能与请求了该类别的PVC进行绑定
-  - 未设定类别的PV则只能与不请求任何类别的PVC进行绑定
+    - 具有特定类别的PV只能与请求了该类别的PVC进行绑定
+    - 未设定类别的PV则只能与不请求任何类别的PVC进行绑定
 
 - **资源**
 
@@ -890,7 +890,7 @@ spec:
    kubectl create configmap rizhiyi-splserver-config --from-file=./splserver_config.zip --namespace=rizhiyi
    ```
 
-   
+
 
 2. 创建/更新POD
 
@@ -929,5 +929,147 @@ spec:
 
    滚动升级的过程是先启动1个新pod，然后停止一个旧pod，切换到新pod。重复直到全部pod都替换为新的。这个需求貌似很难实现，好在k8s有Deployment可以滚动升级
 
-   
+## 使用Deployment滚动更新
+
+### 1.创建Deployment
+
+```
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ztest-deploy-nginx
+spec:
+  selector:
+    matchLabels:
+      app: ztest-deploy
+  template:
+    metadata:
+      labels:
+        app: ztest-deploy
+    spec:
+      containers:
+        - image: nginx:1.22.0
+          name: ztest-nginx
+```
+
+### 2.在线更新replicas为3
+
+```
+kubectl scale deployment ztest-deploy-nginx --replicas 3
+```
+
+### 3.查看replicas的变化,同时修改deployment的镜像版本为nginx:1.23.0
+
+```
+kubectl get pod -n rizhiyi -w|grep ztest-deploy
+#或者用 以下命令观察deployment的变化
+kubectl rollout status deployment ztest-deploy-nginx
+```
+
+```
+kubectl edit deployment ztest-deploy-nginx
+```
+
+```
+ztest-deploy-nginx-577cd64cf6-72nq7       1/1     Running     0          9m38s
+ztest-deploy-nginx-577cd64cf6-7sxx9       1/1     Running     0          7m31s
+ztest-deploy-nginx-577cd64cf6-nw9cm       1/1     Running     0          7m31s
+ztest-deploy-nginx-65cfbc878c-5h7gt       0/1     Pending     0          0s
+ztest-deploy-nginx-65cfbc878c-5h7gt       0/1     Pending     0          0s
+ztest-deploy-nginx-65cfbc878c-5h7gt       0/1     ContainerCreating   0          0s
+ztest-deploy-nginx-65cfbc878c-5h7gt       0/1     ContainerCreating   0          1s
+ztest-deploy-nginx-65cfbc878c-5h7gt       0/1     ErrImagePull        0          8s
+ztest-deploy-nginx-65cfbc878c-5h7gt       0/1     ImagePullBackOff    0          23s
+ztest-deploy-nginx-65cfbc878c-5h7gt       0/1     ErrImagePull        0          42s
+ztest-deploy-nginx-65cfbc878c-5h7gt       0/1     ImagePullBackOff    0          54s
+ztest-deploy-nginx-65cfbc878c-5h7gt       0/1     Terminating         0          68s
+ztest-deploy-nginx-5d58c9cf55-tgbj7       0/1     Pending             0          0s
+ztest-deploy-nginx-5d58c9cf55-tgbj7       0/1     Pending             0          0s
+ztest-deploy-nginx-5d58c9cf55-tgbj7       0/1     ContainerCreating   0          0s
+ztest-deploy-nginx-5d58c9cf55-tgbj7       0/1     ContainerCreating   0          1s
+ztest-deploy-nginx-65cfbc878c-5h7gt       0/1     Terminating         0          69s
+ztest-deploy-nginx-65cfbc878c-5h7gt       0/1     Terminating         0          73s
+ztest-deploy-nginx-65cfbc878c-5h7gt       0/1     Terminating         0          73s
+ztest-deploy-nginx-5d58c9cf55-tgbj7       1/1     Running             0          47s
+ztest-deploy-nginx-577cd64cf6-7sxx9       1/1     Terminating         0          10m
+ztest-deploy-nginx-5d58c9cf55-mddhp       0/1     Pending             0          0s
+ztest-deploy-nginx-5d58c9cf55-mddhp       0/1     Pending             0          0s
+ztest-deploy-nginx-5d58c9cf55-mddhp       0/1     ContainerCreating   0          0s
+ztest-deploy-nginx-5d58c9cf55-mddhp       0/1     ContainerCreating   0          1s
+ztest-deploy-nginx-577cd64cf6-7sxx9       1/1     Terminating         0          10m
+ztest-deploy-nginx-5d58c9cf55-mddhp       1/1     Running             0          2s
+ztest-deploy-nginx-577cd64cf6-7sxx9       0/1     Terminating         0          10m
+ztest-deploy-nginx-577cd64cf6-nw9cm       1/1     Terminating         0          10m
+ztest-deploy-nginx-5d58c9cf55-jdktz       0/1     Pending             0          0s
+ztest-deploy-nginx-5d58c9cf55-jdktz       0/1     Pending             0          0s
+ztest-deploy-nginx-5d58c9cf55-jdktz       0/1     ContainerCreating   0          0s
+ztest-deploy-nginx-577cd64cf6-nw9cm       1/1     Terminating         0          10m
+ztest-deploy-nginx-5d58c9cf55-jdktz       0/1     ContainerCreating   0          1s
+ztest-deploy-nginx-577cd64cf6-nw9cm       0/1     Terminating         0          10m
+ztest-deploy-nginx-5d58c9cf55-jdktz       1/1     Running             0          2s
+ztest-deploy-nginx-577cd64cf6-72nq7       1/1     Terminating         0          12m
+ztest-deploy-nginx-577cd64cf6-72nq7       1/1     Terminating         0          12m
+ztest-deploy-nginx-577cd64cf6-72nq7       0/1     Terminating         0          12m
+ztest-deploy-nginx-577cd64cf6-nw9cm       0/1     Terminating         0          10m
+ztest-deploy-nginx-577cd64cf6-nw9cm       0/1     Terminating         0          10m
+ztest-deploy-nginx-577cd64cf6-7sxx9       0/1     Terminating         0          10m
+ztest-deploy-nginx-577cd64cf6-7sxx9       0/1     Terminating         0          10m
+ztest-deploy-nginx-577cd64cf6-72nq7       0/1     Terminating         0          12m
+ztest-deploy-nginx-577cd64cf6-72nq7       0/1     Terminating         0          12m
+```
+
+
+
+## 关于Deployment
+
+### 1. deployment是用来管理ReplicaSet的
+
+```
+kubectl get rs -n rizhiyi
+```
+
+可以看到3个rs
+
+```
+ztest-deploy-nginx-577cd64cf6       0         0         0       14m
+ztest-deploy-nginx-5d58c9cf55       3         3         3       3m29s
+ztest-deploy-nginx-65cfbc878c       0         0         0       4m36s
+```
+
+对应的pod
+
+```
+ztest-deploy-nginx-5d58c9cf55-jdktz       1/1     Running     0          27s
+ztest-deploy-nginx-5d58c9cf55-mddhp       1/1     Running     0          29s
+ztest-deploy-nginx-5d58c9cf55-tgbj7       1/1     Running     0          76s
+```
+
+上面的操作，换了两次版本，所以有了两个历史的rs。可以用这两个rs进行版本回退。
+
+```
+kubectl rollout undo deployment kubia
+```
+
+```
+kubectl rollout undo deployment kubia - -to-revision=l
+```
+
+### 2.Deployment还可以不滚动升级
+
+考虑到Deployment可以快速回滚，可以尽可能用Deployment而不是ReplicaSet
+
+## 金丝雀发布（灰度发布）
+
+例如现在有3个pod正在运行，升级之后立马暂停，Deployment会保持旧的3个pod并创建一个新版本pod，这时可以测试一下新版本pod是否可用，可用继续，不可用就回退
+
+```
+#修改镜像
+kubect1 set image deployment ztest-deploy-nginx ngnix=nginx:1.23
+#暂停
+kubect1 rollout pause deployment ztest-deploy-nginx
+#继续
+kubect1 rollout resume deployment ztest-deploy-nginx
+#取消
+kubectl rollout undo deployment ztest-deploy-nginx
+```
 
