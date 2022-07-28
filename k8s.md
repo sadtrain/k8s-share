@@ -1060,7 +1060,7 @@ kubectl rollout undo deployment kubia - -to-revision=l
 
 ## 金丝雀发布（灰度发布）
 
-例如现在有3个pod正在运行，升级之后立马暂停，Deployment会保持旧的3个pod并创建一个新版本pod，这时可以测试一下新版本pod是否可用，可用继续，不可用就回退
+例如现在有3个pod正在运行，升级之后立即暂停，Deployment会保持旧的3个pod并创建一个新版本pod，这时可以测试一下新版本pod是否可用，可用继续，不可用就回退
 
 ```
 #修改镜像
@@ -1072,4 +1072,26 @@ kubect1 rollout resume deployment ztest-deploy-nginx
 #取消
 kubectl rollout undo deployment ztest-deploy-nginx
 ```
+
+# StatefulSet
+
+## 有状态的pod
+
+思考以下问题。
+
+之前在分析PVC时有提到，可以在定义ReplicaSet时，声明PVC以持久化ReplicaSet的数据。
+
+![img](k8s.assets/Q@EPQ[%Z_J9CUADJG{4K}2H.png)
+
+问题是多个ReplicaSet是共享PVC的。ReplicaSet是无状态的
+
+如果想每个副本都使用独立 的存储，需要用StatefulSet
+
+## StatefulSet的特性
+
+### 提供稳定的网络标识
+
+![image-20220729010511083](k8s.assets/image-20220729010511083.png)
+
+可以明显看出，由StatefulSet创建的pod拥有可预知的名字和主机名。
 
