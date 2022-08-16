@@ -249,7 +249,9 @@ template是创建新pod需要用的模板，这个模板的配置和我们上面
 
 ## ReplicaSet
 
-与rc的最大区别是，选择器做了很大升级
+与ReplicationController的最大区别是，选择器做了很大升级
+
+因为ReplicaSet生来就是要代替ReplicationController的，所以推荐使用ReplicaSet
 
 ```
 apiVersion: apps/vlbeta2
@@ -333,9 +335,7 @@ kubectl port-forward kubia 8888:8080
 
 现在介绍一种新的暴露服务的方式，Service
 
-
-
-服务是 一 种为一组功能相同的 pod 提供单 一 不变的接入点的资源。 当服务存在时，它的 IP 地址和端口不会改变。 客户端通过 IP 地址和端口号建立连接， 这些连接会被路由到提供该服务的任意 一 个 pod 上。 通过这种方式， 客户端不需要 知道每个单独的提供服务的 pod 的地址， 这样这些 pod 就可以在集群中随时被创建 或移除。
+服务是 一种为一组功能相同的 pod 提供单一不变的接入点的资源。当服务存在时，它的 IP 地址和端口不会改变。 客户端通过 IP 地址和端口号建立连接， 这些连接会被路由到提供该服务的任意一个 pod 上。 通过这种方式， 客户端不需要知道每个单独的提供服务的pod 的地址，这样这些 pod 就可以在集群中随时被创建或移除。
 
 ```
 apiVersion: v1
@@ -359,7 +359,7 @@ kubectl get svc
 可以随便进一个pod去访问这个ip试一下
 
 ```
-kubectl exec kubia-7nogl -- curl -s http: //10 .111. 249 .153
+kubectl exec kubia-7nogl -- curl -s http://10.111.249.153
 ```
 
 默认是随机发给某个应用，可以用sessionAffinity属性设置亲和力，让同一个客户端的请求发给同一个pod。这个跟ngnix的差距还是比较大的。
@@ -371,25 +371,19 @@ spec:
   sessionAffinity: ClientIP
 ```
 
-### endpoint
+### ClusterIp
 
-service只能用selector定位集群内的pod，如果service想访问集群外的pod，可以用endpoint。
+ClusterIp是默认的Sevice类型，上面的例子就是一个ClusterIp
 
-在服务和pod之间还有一个资源-endpoint，endpoint会暴露服务对应的pod的IP和端口列表
+还可以手动指定一个合法的ClusterIp。
 
-手动创建endpoint，可以将服务重定向到外部pod
-
-### Headless
-
-将clusterIp设置为None就是一个无头服务
-
-这个需要通过DNS连接
+这种服务的限制是 只能在集群内访问。这个限制也很好理解，因为ClusterIp是一个集群内的虚拟IP。
 
 ### NodePort
 
-service有clusterip NodePort LoadBalancer ExternalName 这几种
-
 clusterIp是在集群内给service分配了一个虚拟IP，如果想在集群外访问pod，可以用NodePort
+
+这个可以理解为给每个节点都对外开放一个端口，外界可以通过 **节点ip**:**port** 的方式来访问，进而转发到这个节点上的pod。
 
 ```
 apiVersion: v1
@@ -411,6 +405,36 @@ ztest NodePort  10.233.14.30  <none>        17632:30502/TCP  2d13h
 ```
 
 给service分了一个cluster-ip，external-ip是none
+
+<!--如果外部的 IP 路由到集群中一个或多个 Node 上，Kubernetes Service 会被暴露给这些 `externalIPs`。 通过外部 IP（作为目的 IP 地址）进入到集群，打到 Service 的端口上的流量， 将会被路由到 Service 的 Endpoint 上。 `externalIPs` 不会被 Kubernetes 管理，它属于集群管理员的职责范畴。-->
+
+NodePort可以不使用ClusterIp这种默认的负载均衡，这意味着我们可以使用自己的负载均衡策略。
+
+### LoadBalancer
+
+一种负载均衡策略，需要依赖云服务。因为没有合适环境暂不介绍。
+
+### Headless
+
+将clusterIp设置为None就是一个无头服务
+
+对于无头 `Services` 并不会分配 Cluster IP，kube-proxy 不会处理它们， 而且平台也不会为它们进行负载均衡和路由。 DNS 如何实现自动配置，依赖于 Service 是否定义了选择算符。
+
+这个需要通过DNS连接
+
+### NodePort
+
+
+
+#### 手动定义 endpoint
+
+service是通过一个endpoint资源实现service和pod的连接。
+
+service只能用selector定位集群内的pod，如果service想访问集群外的pod，可以手动定义endpoint。
+
+在服务和pod之间还有一个资源-endpoint，endpoint会暴露服务对应的pod的IP和端口列表
+
+手动创建endpoint，可以将服务重定向到外部pod
 
 ## Ingress
 
@@ -641,7 +665,7 @@ https://v2-1.docs.kubesphere.io/docs/zh-CN/appendix/install-openebs/
 
 ### 2. 使用pvc来申请pv
 
-```
+```yaml
 kind: StatefulSet
 apiVersion: apps/v1
 metadata:
@@ -722,7 +746,7 @@ spec:
 
   用于描述用户应用对存储资源的访问权限，访问权限包括下面几种方式：
 
-    - ReadWriteOnce（RWO）：读写权限，但是只能被单个节点挂载
+    - ReadWriteOnce（RWO）：读写权限，但是只能被单个节点挂载。 ReadWriteOnce 访问模式也允许运行在同一节点上的多个 Pod 访问卷。
     - ReadOnlyMany（ROX）： 只读权限，可以被多个节点挂载
     - ReadWriteMany（RWX）：读写权限，可以被多个节点挂载
 
@@ -765,7 +789,7 @@ spec:
 
 我们的pod布局不具备识别原始块的能力，因此手动指定为volumeMode
 
-# 配置
+# 配置ConfigMap
 
 ## 基础回顾
 
@@ -1056,6 +1080,8 @@ kubectl rollout undo deployment kubia - -to-revision=l
 
 ### 2.Deployment还可以不滚动升级
 
+
+
 考虑到Deployment可以快速回滚，可以尽可能用Deployment而不是ReplicaSet
 
 ## 金丝雀发布（灰度发布）
@@ -1083,11 +1109,93 @@ kubectl rollout undo deployment ztest-deploy-nginx
 
 ![img](k8s.assets/Q@EPQ[%Z_J9CUADJG{4K}2H.png)
 
-问题是多个ReplicaSet是共享PVC的。ReplicaSet是无状态的
+```yaml
+apiVersion: vl
+kind: ReplicaSet
+metadata:
+  name: splserver
+spec:
+  replicas: 3
+  selector:
+    app: splserver
+  template:
+    metadata:
+      labels:
+        app: splserver
+    spec:
+      containers:
+        - name: splserver
+          image:
+          ports:
+          - containerPort: 8080
+      volumes:
+        - name: splserver-config
+          configMap:
+            name: rizhiyi-splserver-config
+            defaultMode: 420
+```
 
-如果想每个副本都使用独立 的存储，需要用StatefulSet
+查看上述ReplicaSet，由于ReplicaSet创建的Pod都是基于同一个模板，这些Pod共享同一个PVC。
+
+这是因为ReplicaSet是无状态的，因此k8s不会给ReplicaSet创建的Pod分配独立存储。
+
+如果想每个副本都使用独立的存储，需要用StatefulSet。
 
 ## StatefulSet的特性
+
+```yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx
+  labels:
+    app: nginx
+spec:
+  ports:
+  - port: 80
+    name: web
+  clusterIP: None
+  selector:
+    app: nginx
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: web
+spec:
+  selector:
+    matchLabels:
+      app: nginx # 必须匹配 .spec.template.metadata.labels
+  serviceName: "nginx"
+  replicas: 3 # 默认值是 1
+  minReadySeconds: 10 # 默认值是 0
+  template:
+    metadata:
+      labels:
+        app: nginx # 必须匹配 .spec.selector.matchLabels
+    spec:
+      terminationGracePeriodSeconds: 10
+      containers:
+      - name: nginx
+        image: k8s.gcr.io/nginx-slim:0.8
+        ports:
+        - containerPort: 80
+          name: web
+        volumeMounts:
+        - name: www
+          mountPath: /usr/share/nginx/html
+  volumeClaimTemplates:
+  - metadata:
+      name: www
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      storageClassName: "my-storage-class"
+      resources:
+        requests:
+          storage: 1Gi
+```
+
+
 
 ### 提供稳定的网络标识
 
@@ -1095,3 +1203,9 @@ kubectl rollout undo deployment ztest-deploy-nginx
 
 可以明显看出，由StatefulSet创建的pod拥有可预知的名字和主机名。
 
+为了做到这点，StatefulSet要求必须搭配一个无头服务，通过无头服务提供网络标识。
+
+上述例子中：
+
+- 名为 `nginx` 的 Headless Service 用来控制网络域名。
+- 
